@@ -9,7 +9,7 @@
 
 
 \begin{document}
-\title{Сборник заметок\\по СУБД PostgreSQL}
+\title{Сборник заметок\\по аналитической колоночной СУБД с массово-параллельной архитектурой без разделения ресурсов Vertica}
 
 \author{}
 
@@ -19,6 +19,119 @@
 \thispagestyle{fancy}
 
 \tableofcontents
+
+\section{Установка СУБД Vertica}
+Скачать Community Edition версию \texttt{Vertica} можно по ссылке \url{https://www.vertica.com/download/vertica/community-edition/}. В разделе Community Edition xx.x.x Virtual Machine следует клинуть на Open Virtualization Format. После чего начнется скачивание OVA-файла Vertica.
+
+OVA-файл это пакет, содержащий файлы, используемые для описания виртуальной машины, который включает файл дескриптора \texttt{.OVF}, необзятельный файл манифеста \texttt{.MF}, файлы сертификатов и другие связанные файлы.
+
+OVA-файлы это файлы Open Virtual Appliance, которые еще иногда называют файлами Open Virtual Application или файлами Open Virtualization Format Archive. Они используются программами виртуализации для хранения различных файлов, связанных с виртуальной машиной.
+
+Другими словами, OVA-файл -- это открытое устройство виртуализации, содержащее сжатую версию устанавливаемой виртуальной машины.
+
+Скачав OVA-файл остается только запустить его, например, в VirtualBox. Виртуальная машина \texttt{vertica\_community\_edition-xx.x.x-x.ova} будет содержать собственно Vertica Community Edition, VMart EXample Database, VMart Managment Console, Vertica Administration Tools and vsql и Vertica CE VM User Guide. Начать работать с платформой можно по руководству \url{https://www.vertica.com/docs/VMs/Vertica_CE_VM_User_Guide.pdf}.
+
+В целом диалект SQL \texttt{Vertica} моло чем отличается от диалекта PostgreSQL, но есть и нюансы, с которыми можно ознакомиться на странице документации \url{https://www.vertica.com/docs/10.0.x/HTML/Content/Home.htm}.
+
+Для работы с этой СУБД через помощью Python API есть своя библиотека \texttt{vertica\_python}\footnote{Устанавливается как обычно с помощью менеджера пакетов \texttt{pip}: \texttt{pip install vertica-python}} \url{https://github.com/vertica/vertica-python}
+
+\begin{lstlisting}[
+style = ironpython,
+numbers = none
+]
+import vertica_python
+
+conn_info = {
+	'host' : '127.0.0.1',
+	'port' : 5433,
+	'user' : 'some_user',
+	'password' : 'some_password',
+	'database' : 'a_database',
+	'kerberos_service_name' : 'vertica_krb',
+	'kerberos_host_name' : 'vlcuster.example.com'
+}
+
+with vertica_python.connect(**conn_info) as conn:
+	# do things
+\end{lstlisting}
+
+Вариант с баллансировкой нагрузки
+\begin{lstlisting}[
+style = ironpython,
+numbers = none
+]
+import vertica_python
+
+conn_info = {
+	'host' : '127.0.0.1',
+	'port' : 5433,
+	'user' : 'some_user',
+	'password' : 'some_password',
+	'database' : 'vdb',
+	'connection_laod_balance' : True
+}
+
+# Server enables load balancing
+with vertica_python.connect(**conn_info) as conn:
+	cur = conn.cursor()
+	cur.execute('SELECT NODE_NAME FROM V_MONITOR.CURRENT_SESSION')
+	print('Client connects to primary node:', cur.fetchone()[0])
+	cur.execute("SELECT SET_LOAD_BALANCE_POLICY('ROUNDROBIN')")
+
+with vertica_python.connect(**conn_info) as conn:
+	cur = conn.cursor()
+	cur.execute('SELECT NODE_NAME FROM V_MONITOR.CURRENT_SESSION')
+	print('Client redirects to node:', cur.fetchone()[0])
+\end{lstlisting}
+
+А с помощью библиотеки VerticaPy \url{https://github.com/vertica/VerticaPy} к хранящимся в СУБД данным можно применять модели машинного обучения. Например
+\begin{lstlisting}[
+style = ironpython,
+numbers = none	
+]
+import vertica_python
+from verticapy.learn.datasets import load_titanic
+from verticapy.learn.model_selection import cross_validate
+from verticapy.learn.ensemble import RandomForestClassifier
+
+# Connection using all the DSN information
+conn_info = {
+	'host': "10.211.55.14", 
+	'port': 5433, 
+	'user': "dbadmin", 
+	'password': "XxX", 
+	'database': "testdb"
+}
+
+cur = vertica_python.connect(** conn_info).cursor()
+
+vdf = load_titanic(cursor = cur)
+
+# Data Preparation
+vdf["sex"].label_encode()["boat"].fillna(method = "0ifnull")["name"].str_extract(' ([A-Za-z]+)\.').eval("family_size", expr = "parch + sibsp + 1").drop(columns = ["cabin", "body", "ticket", "home.dest"])["fare"].fill_outliers().fillna()
+
+# Model Evaluation
+cross_validate(RandomForestClassifier("rf_titanic", cur, max_leaf_nodes = 100, n_estimators = 30), 
+vdf, ["age", "family_size", "sex", "pclass", "fare", "boat"], 
+"survived", 
+cutoff = 0.35)
+\end{lstlisting}
+
+
+\section{Вставка нескольких строк в таблицу}
+
+\texttt{Vertica} не поддерживает вставку нескольких строк в одной инструкции \texttt{INSERT INTO} с помощью виртуальных таблиц \texttt{VALUES} как, например, PostgreSQL. Тем неменее существует способ вставить в таблицу несколько строк за раз. Сделать это можно с помощью ключевого слова \texttt{UNION}
+\begin{lstlisting}[
+style = sql,
+numbers = none	
+]
+INSERT INTO packages(package_name, solver_type)
+SELECT 'Ansys', 'direct'
+UNION
+SELECT 'Nastran', 'iterative'
+UNION
+SELECT 'Abaqus', 'direct'
+\end{lstlisting}
 
 
 
