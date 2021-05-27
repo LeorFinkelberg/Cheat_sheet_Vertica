@@ -1,0 +1,34 @@
+\documentclass[%
+	11pt,
+	a4paper,
+	utf8,
+	%twocolumn
+		]{article}	
+
+\usepackage{style_packages/podvoyskiy_article_extended}
+
+
+\begin{document}
+\title{Сборник заметок\\по СУБД PostgreSQL}
+
+\author{}
+
+\date{}
+\maketitle
+
+\thispagestyle{fancy}
+
+\tableofcontents
+
+
+
+% Источники в "Газовой промышленности" нумеруются по мере упоминания 
+\begin{thebibliography}{99}\addcontentsline{toc}{section}{Список литературы}
+	\bibitem{juba:2019}{ \emph{Джуба С.}, \emph{Волков А.} Изучаем PostgreSQL 10. -- М.: ДМК Пресс, 2019. -- 400 с.}
+\end{thebibliography}
+
+%\listoffigures\addcontentsline{toc}{section}{Список иллюстраций}
+
+\lstlistoflistings\addcontentsline{toc}{section}{Список листингов}
+
+\end{document}
